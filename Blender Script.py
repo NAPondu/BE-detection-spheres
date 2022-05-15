@@ -6,13 +6,19 @@ context = bpy.context
 scene = context.scene
 vl = context.view_layer.depsgraph
 bpy.data.worlds["World"].node_tree.nodes["Background"].inputs[0].default_value = (0, 0, 0, 1)
+bpy.context.scene.render.image_settings.file_format = 'JPEG'
+bpy.context.scene.render.resolution_x = 1024
+bpy.context.scene.render.resolution_y = 768
+
 
 ballSize = .061
 nbSphere = 100
 nbImage = 100
 filePath = "C:\\Users\\nicol\\Documents\\Travail\\BE\\rendus\\"
 nomCamera = "Camera"
-nomMur = "09_PANNEAU_CHEVAL"
+nomMur = "08_MAMMOUTHS_HQ"
+nbImageMax = 100000
+numeroDebut = 200
 
 def distance(point1: Vector, point2: Vector) -> float:
     return (point2 - point1).length
@@ -152,8 +158,11 @@ def cleanup():
 def randomCap(nbSpheres):
     if nbSpheres == 1:
         return 1
-    rnd = randrange(1, nbSpheres)*3/nbSpheres
+    rnd = randrange(1, nbSpheres)*2/nbSpheres
     return int(round(1/rnd))
+
+def numbering(i, numeroDebut, nbImageMax):
+    return str(i+numeroDebut).zfill(math.ceil(math.log10(nbImageMax)))
 
 #-----------------------------------------------------------------------------------
 
@@ -198,8 +207,8 @@ wall = scene.objects.get(nomMur)
 listSphere = createSphereBatch(nbSphere,"Ball",ballSize)
 for i in range (nbImage):
     sceneBuildUp(listSphere,camera,light,point)
-    pathImage = filePath + "im_"+str(i+1)+".png"
+    pathImage = filePath + "im_"+numbering(i,numeroDebut,nbImageMax)
     cam_and_render(camera,pathImage)
-    pathMask = filePath + "im_"+str(i+1)+"_mk.png"
+    pathMask = filePath + "im_"+numbering(i,numeroDebut,nbImageMax)+"_mk"
     mask(light,maskLight,wall,camera,pathMask)
 cleanup()
