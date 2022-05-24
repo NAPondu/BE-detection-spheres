@@ -42,27 +42,27 @@ def delete(obj):
     bpy.ops.object.select_all(action='DESELECT')
     obj.select_set(True)
     bpy.ops.object.delete()
-    
+
 #Cache l'objet obj
 def hide(obj):
     obj.hide_viewport = True
     obj.hide_render = True
-    
+
 #Cache tous les objets de la liste objList
 def hideAll(objList):
     for obj in objList:
         hide(obj)
-    
+
 #Montre l'objet obj
 def show(obj):
     obj.hide_viewport = False
     obj.hide_render = False
-    
+
 #Montre tous les objets de la liste objList
 def showAll(objList):
     for obj in objList:
         show(obj)
-        
+
 #Nettoie la scène et la data de tous les objets sauf la caméra et la paroi
 def cleanup():
     for obj in bpy.data.objects:
@@ -78,7 +78,7 @@ def cleanup():
             bpy.data.materials.remove(mat)
     for light in bpy.data.lights:
         bpy.data.lights.remove(light)
-        
+
 #Retourne le nombre de sphères à afficher
 def nbSphAffichees(nbSpheresMax, mode):
     if nbSpheresMax == 1:
@@ -91,7 +91,7 @@ def nbSphAffichees(nbSpheresMax, mode):
         return nbSpheresMax - int(round(1/(randrange(1, nbSpheresMax)*2/nbSpheresMax)))
     else:
         return randrange(1,nbSpheresMax)
-    
+
 #Numérote les images
 def numbering(i, numeroDebut, nbImageMax):
     return str(i+numeroDebut).zfill(math.ceil(math.log10(nbImageMax)))
@@ -101,13 +101,13 @@ def cam_and_render(camera, filepath):
     bpy.context.scene.camera = camera
     bpy.context.scene.render.filepath = filepath
     bpy.ops.render.render(write_still=True)
-        
+
 #-----------------------------------------------------------------------------------
-    
+
 #Création de la scène
 
 
-#Crée une lumière qui éclaire vers le point point    
+#Crée une lumière qui éclaire vers le point point
 def createLight(point):
     data = bpy.data.lights.new(name="Light", type='AREA')
     data.energy = 1000
@@ -119,7 +119,7 @@ def createLight(point):
 
 #Crée un point
 def createPoint():
-    bpy.ops.object.empty_add() 
+    bpy.ops.object.empty_add()
     point = bpy.context.selected_objects[0]
     return point
 
@@ -127,8 +127,9 @@ def createPoint():
 def createSphereBatch(nbSphere,nameSphere,sphereSize):
     sphereList = []
     for i in range (nbSphere):
+        rando = uniform(.9,1.05)
         bpy.ops.mesh.primitive_uv_sphere_add(
-            scale=(sphereSize, sphereSize, sphereSize)
+            scale=(sphereSize*rando, sphereSize*rando, sphereSize*rando)
         )
         newSphere = bpy.context.selected_objects[0]
         if nameSphere != "":
@@ -188,7 +189,7 @@ def sceneBuildUp(globalSphereList,camera,light,point):
             while (i< len(sphereList)):
                 hideCheck = False
                 for j in range (i) :
-                    if (i != j and (distance(sphereList[i].location,sphereList[j].location) < 2.2*ballSize) 
+                    if (i != j and (distance(sphereList[i].location,sphereList[j].location) < 2.2*ballSize)
                         and not hideCheck):
                         hideCheck = True
                 #if the object overlaps with a higher priority object, hides it
@@ -201,7 +202,7 @@ def sceneBuildUp(globalSphereList,camera,light,point):
                     i+=1
         placeLightBehindCamera(camera,light)
         return sphereList
-    return None 
+    return None
 
 #-----------------------------------------------------------------------------------
 
@@ -218,17 +219,17 @@ def createMaskLight(point):
 
 #Prépare la scène pour faire le rendu du masque
 def mask_render_setup(normal_light, mask_light, wall_mesh):
-    bpy.context.scene.render.image_settings.color_mode = 'BW'    
-
+    bpy.context.scene.render.image_settings.color_mode = 'BW'
+    bpy.data.worlds["World"].node_tree.nodes["Background"].inputs[0].default_value = (0, 0, 0, 1)
     #Changing visibility of objects needed for masks
     normal_light.hide_render = True
     wall_mesh.hide_render = True
     mask_light.hide_render = False
-    
+
 #Prépare la scène pour le rendu de base
 def normal_render_setup(normal_light, mask_light, wall_mesh):
     bpy.context.scene.render.image_settings.color_mode = 'RGB'
-
+    bpy.data.worlds["World"].node_tree.nodes["Background"].inputs[0].default_value = (.25, .25, .25, 1)
     #Changing visibility of objects needed for masks
     normal_light.hide_render = False
     wall_mesh.hide_render = False
@@ -257,31 +258,31 @@ def colo(objList, mode):
         material.node_tree.nodes["Principled BSDF"].inputs[0].default_value = (randRGB(), randRGB(), randRGB(), 1)
         for obj in objList:
             obj.active_material = material
-            
+
     elif mode == "allDifferent":
         for obj in objList:
-            material = bpy.data.materials["Material"+str(objList.index(obj))] 
+            material = bpy.data.materials["Material"+str(objList.index(obj))]
             material.use_nodes = True
             material.node_tree.nodes["Principled BSDF"].inputs[0].default_value = (randRGB(), randRGB(), randRGB(), 1)
             obj.active_material = material
     return mode
-         
-#Random pour la séléction des couleurs   
+
+#Random pour la séléction des couleurs
 def randRGB():
     return randrange(0,101)/100
 
 #-----------------------------------------------------------------------------------
 
 def main():
-    bpy.data.worlds["World"].node_tree.nodes["Background"].inputs[0].default_value = (0, 0, 0, 1)
-    
+    bpy.data.worlds["World"].node_tree.nodes["Background"].inputs[0].default_value = (.25, .25, .25, 1)
+
     camera = bpy.context.scene.objects.get(nomCamera)
     wall = bpy.context.scene.objects.get(nomMur)
     point = createPoint()
     light = createLight(point)
     maskLight = createMaskLight(point)
     maskLight.location = camera.matrix_world @ Vector((0,0,.1))
-    
+
     listSphere = createSphereBatch(nbSphere,"Ball",ballSize)
     colorSetup(listSphere)
 
@@ -293,7 +294,15 @@ def main():
         pathMask = filePath + "im_"+numbering(i,numeroDebut,nbImageMax)+"_mk"
         mask(light,maskLight,wall,camera,pathMask)
     cleanup()
-    
+
 #-----------------------------------------------------------------------------------
 
 main()
+
+print(r"""___.           __         .__                                
+\_ |__ _____ _/  |_  ____ |  |__     _______  __ ___________ 
+ | __ \\__  \\   __\/ ___\|  |  \   /  _ \  \/ // __ \_  __ \
+ | \_\ \/ __ \|  | \  \___|   Y  \ (  <_> )   /\  ___/|  | \/
+ |___  (____  /__|  \___  >___|  /  \____/ \_/  \___  >__|   
+     \/     \/          \/     \/                   \/   
+     """)  
