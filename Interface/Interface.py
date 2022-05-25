@@ -1,12 +1,31 @@
+from re import I
 from tkinter import *
 from tkinter import messagebox
 from tkinter import filedialog
+from tkinter import ttk
+from numba import cuda
+from PIL import Image
 import pathlib
+import os
 import ntpath
+import tensorflow as tf
+import numpy as np
 
+#Variables globales
 global inputFilePath
 global outputDirectoryPath 
+global comboBox
+comboBox = "Crop"
+model = None
 outputDirectoryPath = pathlib.Path().resolve()
+IMAGE_SIZE = 128
+
+#Clear la mémoire lorsque le logiciel est éteint
+def on_closing():
+    tf.keras.backend.clear_session()
+    cuda.select_device(0)
+    cuda.close()
+    root.destroy()
 
 #Découpe un chemin pour n'avoir que le dernier élément
 def path_leaf(path):
@@ -33,7 +52,134 @@ def openOutputDirectory():
     if outputDirectoryPath:
         entryOutputText.set(outputDirectoryPath)
 
-#Permet d'executer notre programme (WIP)
+#Coupe une image en plusieurs sous-images de taille IMAGE_SIZE*IMAGE_SIZE
+def crop(input_file):
+    img = Image.open(input_file)
+    img_width, img_height = img.size
+    for i in range(img_height//IMAGE_SIZE):
+        for j in range(img_width//IMAGE_SIZE):
+            box = (j*IMAGE_SIZE, i*IMAGE_SIZE, (j+1)*IMAGE_SIZE, (i+1)*IMAGE_SIZE)
+            yield img.crop(box)
+
+#Coupe l'ensemble des images passées en paramètre en plusieurs sous-images de taille IMAGE_SIZE*IMAGE_SIZE
+#return un tableau contenant l'ensemble des images crop
+def split(imagePath):
+    nbSousImages = 0
+    for infile in imagePath:
+        img = Image.open(infile)
+        nbSousImages = nbSousImages + int((img.width/IMAGE_SIZE)*(img.height/IMAGE_SIZE))
+    imgArray = np.zeros((nbSousImages, IMAGE_SIZE, IMAGE_SIZE, 3))
+    i = 0
+    for infile in imagePath:
+        for k, piece in enumerate(crop(infile), 1):
+            img = Image.new('RGB', (IMAGE_SIZE, IMAGE_SIZE), 255)
+            img.paste(piece)
+            imgArray[i] = np.asarray(img)
+            i = i+1
+    return imgArray
+
+#Recombine les masques entre eux pour qu'ils correspondent à l'image originale 
+def combineMask(imagePath, imgArrayMask, out_dir):
+    nbSousImages = 0
+    i = 0
+    k = 0
+    for infile in imagePath:
+        img = Image.open(infile)
+        new_im = Image.new('RGB', (img.width, img.height))
+        nbSousImages = nbSousImages + int((img.width/IMAGE_SIZE)*(img.height/IMAGE_SIZE))
+        for y in range(0, int(img.height/IMAGE_SIZE)):
+            for x in range(0, int(img.width/IMAGE_SIZE)):
+                imgMask = Image.fromarray((imgArrayMask[i]*255).astype(np.uint8))
+                new_im.paste(imgMask, (x*IMAGE_SIZE,y*IMAGE_SIZE))
+                i = i+1
+        img_path = os.path.join(out_dir, 
+                                    path_leaf(infile).split('.')[0]+ '_'
+                                    + str(k).zfill(5) + '.png')
+        new_im.save(img_path)
+        k = k+1
+
+#Resize les images en entrées en taille IMAGE_SIZE*IMAGE_SIZE
+#Return un tableau des images resize
+def resizeImg(imagePath):
+    images = np.zeros((len(imagePath), IMAGE_SIZE, IMAGE_SIZE, 3))
+    i = 0
+    for img_name in imagePath:
+        img = Image.open(img_name)
+        img = img.resize((IMAGE_SIZE,IMAGE_SIZE), Image.ANTIALIAS)
+        images[i] = np.asarray(img)
+        i = i+1 
+    return images
+
+#Execute le modèle en effectuant un cropping des images
+def launchModelCrop(imgArray, imagePath, out_dir):
+    #Lancement de la progressBar
+    popup = Toplevel()
+    textPourcentage = StringVar()
+    textImages = StringVar()
+    textImages.set("Lancement du modèle...")
+    Label(popup, textvariable=textPourcentage).grid(row=1,column=0)
+    Label(popup, textvariable=textImages).grid(row=2,column=0)
+    progress = 0
+    progress_var = DoubleVar()
+    progress_var.set(0.0)
+    progress_bar = ttk.Progressbar(popup, variable=progress_var, maximum=100)
+    progress_bar.grid(row=0, column=0)
+    popup.update()
+    progress_step = float(100.0/len(imgArray))
+    #Lancement du modèle
+    predictions = model.predict(imgArray)
+    imgArrayMask = np.zeros((len(predictions), IMAGE_SIZE, IMAGE_SIZE, 3))
+    i = 0
+    for img in predictions:
+        popup.update()
+        textImages.set("Enregistrement des images... ("+str(i)+"/"+str(len(predictions))+" images)")
+        textPourcentage.set(str(int((i/len(predictions)*100)))+"%")
+        imgArrayMask[i] = np.asarray(img)
+        progress += progress_step
+        progress_var.set(progress)
+        i = i+1
+    textImages.set("Création des masques...")
+    textPourcentage.set("")
+    combineMask(imagePath, imgArrayMask, out_dir)
+    popup.destroy()
+
+#Execute le modèle en resizant les images 
+def launchModelResize(images, out_dir):
+    #Lancement de la progressBar
+    popup = Toplevel()
+    textPourcentage = StringVar()
+    textPourcentage.set("0%")
+    textImages = StringVar()
+    textImages.set("Lancement du modèle...")
+    Label(popup, textvariable=textPourcentage).grid(row=1,column=0)
+    Label(popup, textvariable=textImages).grid(row=2,column=0)
+    progress = 0
+    progress_var = DoubleVar()
+    progress_var.set(0.0)
+    progress_bar = ttk.Progressbar(popup, variable=progress_var, maximum=100)
+    progress_bar.grid(row=0, column=0)
+    popup.update()
+    progress_step = float(100.0/len(images))
+    #Lancement du modèle
+    predictions = model.predict(images)
+    i = 1
+    for img in predictions:
+        popup.update()
+        textImages.set("Enregistrement des images... ("+str(i)+"/"+str(len(images))+" images)")
+        textPourcentage.set(str(int((i/len(images)*100)))+"%")
+        new_im = Image.new('RGB', (IMAGE_SIZE, IMAGE_SIZE))
+        imgMask = Image.fromarray((np.squeeze(img, axis=2)*255).astype(np.uint8))
+        new_im.paste(imgMask, (0,0))
+        img_path = os.path.join(out_dir, 
+                                    "Resize"+ '_'
+                                    + str(i).zfill(5) + '.png')
+        new_im.save(img_path)
+        i = i+1
+        progress += progress_step
+        progress_var.set(progress)
+    popup.destroy()
+
+#Permet d'executer notre programme
 def run():
     #Gestion d'erreurs
     try: inputFilePath
@@ -52,6 +198,31 @@ def run():
         if not outputDirectoryPath:
             messagebox.showerror("Erreur", "Vous n'avez pas sélectionné de répertoire!")
             return
+    #Load modele
+    global model
+    if model is None:
+        model = tf.keras.models.load_model("model.h5")
+
+    #Observe la valeur dans la comboBox
+    global comboBox
+    if not comboBox or comboBox is None:
+        messagebox.showerror("Erreur", "Vous n'avez pas sélectionné de valeur dans la configuration!")
+        return
+    if comboBox=="Crop":
+        #Conserve les sous-images (de taille IMAGE_SIZE*IMAGE_SIZE) dans le tableau imgArray
+        imgArray = split(inputFilePath)
+        #Execute le modele
+        launchModelCrop(imgArray, inputFilePath, outputDirectoryPath)
+    if comboBox=="Resize":
+        #Resize tout les images
+        imgArray = resizeImg(inputFilePath)    
+        #Execute le modele
+        launchModelResize(imgArray, outputDirectoryPath)
+
+#Est appellé quand la valeur "resize" ou "crop" de la comboBox est modifiée
+def comboBoxChange(event):
+    global comboBox
+    comboBox = SelectLaunchOption.get()
 
 #Initialisation
 root = Tk()
@@ -91,8 +262,14 @@ aideLabel4.grid(row=3, sticky=W)
 #Label Frame 2
 etapeDeux = LabelFrame(root, text=" 2. Configuration: ")
 etapeDeux.grid(row=2, columnspan=7, sticky='WE', padx=5, pady=5, ipadx=5, ipady=5)
-labelWIP2 = Label(etapeDeux, text= "WIP")
-labelWIP2.grid(row=0)
+labelWIP2 = Label(etapeDeux, text= "Crop donnera des résultats précis mais est plus lent à éxecuter")
+labelWIP2.grid(row=0, sticky='W')
+labelWIP2 = Label(etapeDeux, text= "Resize est plus rapide mais moins précis")
+labelWIP2.grid(row=1, sticky='W')
+SelectLaunchOption = ttk.Combobox(etapeDeux, values=["Crop",  "Resize"], state="readonly")
+SelectLaunchOption.grid(row=2, sticky='W')
+SelectLaunchOption.current(0)
+SelectLaunchOption.bind('<<ComboboxSelected>>', comboBoxChange)
 
 #Label Frame 3
 etapeTrois = LabelFrame(root, text= " 3. Données générées: ")
@@ -106,4 +283,5 @@ launchFrame.grid(row=4, columnspan=7, padx=5, pady=5, ipadx=5, ipady=5)
 launchButton = Button(launchFrame, text="Executer le programme",command=run)
 launchButton.grid(row=1, column=8, padx=5, pady=2)
 
+root.protocol("WM_DELETE_WINDOW", on_closing)
 root.mainloop()
