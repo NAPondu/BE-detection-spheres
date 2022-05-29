@@ -179,30 +179,50 @@ def launchModelResize(images, out_dir):
         progress_var.set(progress)
     popup.destroy()
 
-#Permet d'executer notre programme
-def run():
-    #Gestion d'erreurs
+#Gestion d'erreurs lors de l'execution du programme
+def gestionErreurs():
     try: inputFilePath
     except NameError:
         messagebox.showerror("Erreur", "Vous n'avez pas sélectionné d'image!")
-        return
+        return True
     else:
         if not inputFilePath:
             messagebox.showerror("Erreur", "Vous n'avez pas sélectionné d'image!")
-            return
+            return True
     try: outputDirectoryPath
     except NameError:
         messagebox.showerror("Erreur", "Vous n'avez pas sélectionné de répertoire!")
-        return
+        return True
     else: 
         if not outputDirectoryPath:
             messagebox.showerror("Erreur", "Vous n'avez pas sélectionné de répertoire!")
-            return
+            return True
+    try: int(intensiteLumineuse.get())
+    except ValueError:
+        messagebox.showerror("Erreur", "Vous devez entrer un nombre entier pour l'intensité!")
+        return True
+    else: 
+        if int(intensiteLumineuse.get())<0 or int(intensiteLumineuse.get())>255:
+            messagebox.showerror("Erreur", "L'intensité lumineuse doit être comprise entre 0 et 255!")
+            return True
+    try: float(rayonSphere.get())
+    except ValueError:
+        messagebox.showerror("Erreur", "Vous devez entrer un nombre pour le rayon de la sphère!")
+        return True
+    else: 
+        if (float(rayonSphere.get()))<0:
+            rayonSphere.set(abs(float(rayonSphere.get())))
+    return False
+
+#Permet d'executer notre programme
+def run():
+    #Gestion d'erreurs
+    if gestionErreurs():
+        return
     #Load modele
     global model
     if model is None:
         model = tf.keras.models.load_model("model.h5")
-
     #Observe la valeur dans la comboBox
     global comboBox
     if not comboBox or comboBox is None:
@@ -218,6 +238,13 @@ def run():
         imgArray = resizeImg(inputFilePath)    
         #Execute le modele
         launchModelResize(imgArray, outputDirectoryPath)
+    
+    boolDetaille = rapportDetaille.get()
+    boolSimple = rapportSimple.get()
+    intIntensite = int(intensiteLumineuse.get())
+    floatRayon = float(rayonSphere.get())
+    cheminsFichiers = inputFilePath
+    print(str(boolSimple)+" "+str(boolDetaille)+" "+str(intIntensite)+" "+str(floatRayon)+" "+str(cheminsFichiers))
 
 #Est appellé quand la valeur "resize" ou "crop" de la comboBox est modifiée
 def comboBoxChange(event):
@@ -229,6 +256,12 @@ root = Tk()
 root.wm_title("Sphere Detection")
 entryInputText = StringVar()
 entryOutputText = StringVar()
+rapportDetaille = IntVar()
+rapportSimple = IntVar()
+intensiteLumineuse = StringVar()
+intensiteLumineuse.set(str(255))
+rayonSphere = StringVar()
+rayonSphere.set(str(1))
 
 #Label Frame 1
 etapeUne = LabelFrame(root, text= " 1. Fichiers entrée / sortie: ")
@@ -250,26 +283,48 @@ outputFileButton.grid(row=1, column=8, sticky='W', padx=5, pady=2)
 #Label Frame Aide
 aideFrame = LabelFrame(root, text=" Aide rapide")
 aideFrame.grid(row=0, column=9, columnspan=2, rowspan=8, sticky='NS', padx=5, pady=5)
-aideLabel1 = Label(aideFrame, text= "Veuillez sélectionner des images avant de lancer le programme")
+aideEtapeUne = LabelFrame(aideFrame, text=" 1. Entrees/sorties")
+aideEtapeUne.grid(row=1, columnspan=7, sticky='WE', padx=5, pady=5, ipadx=5, ipady=5)
+aideLabel1 = Label(aideEtapeUne, text= "Veuillez sélectionner des images avant de lancer le programme")
 aideLabel1.grid(row=0, sticky=W)
-aideLabel2 = Label(aideFrame, text= "Le répertoire d'enregistrement par défaut est:")
+aideLabel2 = Label(aideEtapeUne, text= "Le répertoire d'enregistrement par défaut est:")
 aideLabel2.grid(row=1, sticky=W)
-aideLabel3 = Label(aideFrame, text= pathlib.Path().resolve(), fg="#007BFF")
+aideLabel3 = Label(aideEtapeUne, text= pathlib.Path().resolve(), fg="#007BFF")
 aideLabel3.grid(row=2, sticky=W)
-aideLabel4 = Label(aideFrame, text= "Vous pouvez choisir de modifier ce répertoire")
+aideLabel4 = Label(aideEtapeUne, text= "Vous pouvez choisir de modifier ce répertoire")
 aideLabel4.grid(row=3, sticky=W)
+aideEtapeDeux = LabelFrame(aideFrame, text=" 2. Configuration")
+aideEtapeDeux.grid(row=2, columnspan=7, sticky='WE', padx=5, pady=5, ipadx=5, ipady=5)
+aideLabel5 = Label(aideEtapeDeux, text= "Crop donnera des résultats précis mais est plus lent à éxecuter")
+aideLabel5.grid(row=0, sticky=W)
+aideLabel6 = Label(aideEtapeDeux, text= "Resize est plus rapide mais moins précis")
+aideLabel6.grid(row=1, sticky=W)
+aideLabel7 = Label(aideEtapeDeux, text= "Rapport simple = données en moyenne sur une image")
+aideLabel7.grid(row=2, sticky=W)
+aideLabel8 = Label(aideEtapeDeux, text= "Rapport detaille = données de chaque sphère sur chaque image")
+aideLabel8.grid(row=3, sticky=W)
+aideLabel9 = Label(aideEtapeDeux, text= "Changer l'intensité si les sphères sont de couleurs spécifiques")
+aideLabel9.grid(row=4, sticky=W)
 
 #Label Frame 2
 etapeDeux = LabelFrame(root, text=" 2. Configuration: ")
 etapeDeux.grid(row=2, columnspan=7, sticky='WE', padx=5, pady=5, ipadx=5, ipady=5)
-labelWIP2 = Label(etapeDeux, text= "Crop donnera des résultats précis mais est plus lent à éxecuter")
-labelWIP2.grid(row=0, sticky='W')
-labelWIP2 = Label(etapeDeux, text= "Resize est plus rapide mais moins précis")
-labelWIP2.grid(row=1, sticky='W')
 SelectLaunchOption = ttk.Combobox(etapeDeux, values=["Crop",  "Resize"], state="readonly")
-SelectLaunchOption.grid(row=2, sticky='W')
+SelectLaunchOption.grid(row=0, sticky='W')
 SelectLaunchOption.current(0)
 SelectLaunchOption.bind('<<ComboboxSelected>>', comboBoxChange)
+CheckboxSimple = Checkbutton(etapeDeux, text='Rapport simple', variable=rapportSimple)
+CheckboxSimple.grid(row=1, column=0 ,sticky='W')
+CheckboxDetaille = Checkbutton(etapeDeux, text='Rapport detaille', variable=rapportDetaille)
+CheckboxDetaille.grid(row=1, column=1, sticky='W')
+LabelIntensiteLumineuse = Label(etapeDeux, text= "Intensité la plus élevée en RGB: ")
+LabelIntensiteLumineuse.grid(row=6, column=0, sticky='W', columnspan=7)
+EntryIntensiteLumineuse = Entry(etapeDeux, textvariable=intensiteLumineuse)
+EntryIntensiteLumineuse.grid(row=6, column=7, sticky='W')
+LabelRayonSphere = Label(etapeDeux, text= "Taille prévue des sphères en unité arbitraire: ")
+LabelRayonSphere.grid(row=7, column=0, sticky='W', columnspan=7)
+EntryRayonSphere = Entry(etapeDeux, textvariable=rayonSphere)
+EntryRayonSphere.grid(row=7, column=7, sticky='W')
 
 #Label Frame 3
 etapeTrois = LabelFrame(root, text= " 3. Données générées: ")
