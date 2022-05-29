@@ -303,7 +303,7 @@ aideLabel7 = Label(aideEtapeDeux, text= "Rapport simple = données en moyenne su
 aideLabel7.grid(row=2, sticky=W)
 aideLabel8 = Label(aideEtapeDeux, text= "Rapport detaille = données de chaque sphère sur chaque image")
 aideLabel8.grid(row=3, sticky=W)
-aideLabel9 = Label(aideEtapeDeux, text= "Changer l'intensité si les sphères sont de couleurs spécifiques")
+aideLabel9 = Label(aideEtapeDeux, text= "Changer l'intensité max si les sphères sont de couleurs spécifiques")
 aideLabel9.grid(row=4, sticky=W)
 
 #Label Frame 2
