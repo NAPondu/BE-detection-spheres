@@ -327,10 +327,10 @@ EntryRayonSphere = Entry(etapeDeux, textvariable=rayonSphere)
 EntryRayonSphere.grid(row=7, column=7, sticky='W')
 
 #Label Frame 3
-etapeTrois = LabelFrame(root, text= " 3. Données générées: ")
-etapeTrois.grid(row=3, columnspan=7, sticky='WE', padx=5, pady=5, ipadx=5, ipady=5)
-labelWIP3 = Label(etapeTrois, text= "WIP")
-labelWIP3.grid(row=0)
+#etapeTrois = LabelFrame(root, text= " 3. Données générées: ")
+#etapeTrois.grid(row=3, columnspan=7, sticky='WE', padx=5, pady=5, ipadx=5, ipady=5)
+#labelWIP3 = Label(etapeTrois, text= "WIP")
+#labelWIP3.grid(row=0)
 
 #Launch frame
 launchFrame = Frame(root)
