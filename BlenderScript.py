@@ -1,3 +1,7 @@
+#Authors: Nicolas DUPONT, Joey MARTINEZ
+
+#https://github.com/NAPondu/BE-detection-spheres
+
 import bpy
 import math
 from mathutils import Vector, Matrix
@@ -12,7 +16,8 @@ bpy.context.scene.render.resolution_y = 768
 bpy.context.scene.render.image_settings.file_format = 'JPEG'
 
 #Paramètres des sphères
-ballSize = .061 #Taille (en mm)
+ballSize = .061 #Taille (en m)
+sizeVariation = 0.05 #Variation max de la taille des sphères (entre 0 et 1)
 nbSphere = 100 #Nombre max à afficher
 sphereColorMode = "" #Choix des couleurs: par défaut(toutes blanches), allSame(toutes de la même couleur), allDifferent(toutes d'une couleur différente)
 sphereNbMode = "" #Choix du nombre de sphères à afficher: par défaut(au hasard), smallWeightedWithNone(plus grande proba d'avoir peu de sphères,voire pas du tout),
@@ -92,6 +97,34 @@ def nbSphAffichees(nbSpheresMax, mode):
     else:
         return randrange(1,nbSpheresMax)
 
+#Affecte les couleurs aux sphères
+def colorSetup(objList):
+    main_mat = bpy.data.materials.new("Main Material")
+    for i in range(0, len(objList)):
+        new_mat = bpy.data.materials.new("Material"+str(i))
+    return objList
+
+#Change les couleurs des sphères en fonction du mode choisi
+def colo(objList, mode):
+    if mode == "allSame":
+        material = bpy.data.materials["Main Material"]
+        material.use_nodes = True
+        material.node_tree.nodes["Principled BSDF"].inputs[0].default_value = (randRGB(), randRGB(), randRGB(), 1)
+        for obj in objList:
+            obj.active_material = material
+
+    elif mode == "allDifferent":
+        for obj in objList:
+            material = bpy.data.materials["Material"+str(objList.index(obj))]
+            material.use_nodes = True
+            material.node_tree.nodes["Principled BSDF"].inputs[0].default_value = (randRGB(), randRGB(), randRGB(), 1)
+            obj.active_material = material
+    return mode
+
+#Random pour la sélection des couleurs
+def randRGB():
+    return randrange(0,101)/100
+
 #Numérote les images
 def numbering(i, numeroDebut, nbImageMax):
     return str(i+numeroDebut).zfill(math.ceil(math.log10(nbImageMax)))
@@ -127,7 +160,7 @@ def createPoint():
 def createSphereBatch(nbSphere,nameSphere,sphereSize):
     sphereList = []
     for i in range (nbSphere):
-        rando = uniform(.9,1.05)
+        rando = uniform(1-sizeVariation, 1+sizeVariation)
         bpy.ops.mesh.primitive_uv_sphere_add(
             scale=(sphereSize*rando, sphereSize*rando, sphereSize*rando)
         )
@@ -189,7 +222,7 @@ def sceneBuildUp(globalSphereList,camera,light,point):
             while (i< len(sphereList)):
                 hideCheck = False
                 for j in range (i) :
-                    if (i != j and (distance(sphereList[i].location,sphereList[j].location) < 2.2*ballSize)
+                    if (i != j and (distance(sphereList[i].location,sphereList[j].location) < 2.2*ballSize*(1+sizeVariation))
                         and not hideCheck):
                         hideCheck = True
                 #if the object overlaps with a higher priority object, hides it
@@ -205,6 +238,10 @@ def sceneBuildUp(globalSphereList,camera,light,point):
     return None
 
 #-----------------------------------------------------------------------------------
+
+#Création du masque
+
+
 
 #Crée la lumière qui sert à faire le masque
 def createMaskLight(point):
@@ -241,35 +278,6 @@ def mask(normal_light, mask_light, wall_mesh, camera, filepath):
     cam_and_render(camera, filepath)
     normal_render_setup(normal_light, mask_light, wall_mesh)
 
-#-----------------------------------------------------------------------------------
-
-#Affecte les couleurs aux sphères
-def colorSetup(objList):
-    main_mat = bpy.data.materials.new("Main Material")
-    for i in range(0, len(objList)):
-        new_mat = bpy.data.materials.new("Material"+str(i))
-    return objList
-
-#Change les couleurs des sphères en fonction du mode choisi
-def colo(objList, mode):
-    if mode == "allSame":
-        material = bpy.data.materials["Main Material"]
-        material.use_nodes = True
-        material.node_tree.nodes["Principled BSDF"].inputs[0].default_value = (randRGB(), randRGB(), randRGB(), 1)
-        for obj in objList:
-            obj.active_material = material
-
-    elif mode == "allDifferent":
-        for obj in objList:
-            material = bpy.data.materials["Material"+str(objList.index(obj))]
-            material.use_nodes = True
-            material.node_tree.nodes["Principled BSDF"].inputs[0].default_value = (randRGB(), randRGB(), randRGB(), 1)
-            obj.active_material = material
-    return mode
-
-#Random pour la séléction des couleurs
-def randRGB():
-    return randrange(0,101)/100
 
 #-----------------------------------------------------------------------------------
 
